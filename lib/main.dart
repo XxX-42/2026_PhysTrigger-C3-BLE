@@ -108,26 +108,53 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     try {
       // Start BLE scan
       WinBle.startScanning();
+      debugPrint('[SCAN] ========== SCAN STARTED ==========');
       
-      // Listen for scan results
+      // Listen for scan results - log EVERY device
       _scanSubscription = WinBle.scanStream.listen((device) {
-        debugPrint('[SCAN] Found: ${device.name} (${device.address})');
+        // 上帝视角日志 - 打印每一个设备
+        debugPrint('[DEBUG SCAN] Found: "${device.name}" [${device.address}] RSSI:${device.rssi}');
         
         final name = device.name;
         final address = device.address;
         
-        // Match by name OR by MAC address
-        if (name == "PhysTrigger_Device" || 
-            name.contains("PhysTrigger") ||
-            address.toUpperCase().contains("1C:DB:D4:E0:A6:AE") ||
-            address.toUpperCase().replaceAll(':', '').contains("1CDBD4E0A6AE")) {
+        // 匹配逻辑 - 优先 MAC 地址，然后名字
+        bool isTarget = false;
+        bool matchedByMac = false;
+        
+        // 1. 优先检查 MAC 地址
+        if (address.toLowerCase() == "1c:db:d4:e0:a6:ae") {
+          isTarget = true;
+          matchedByMac = true;
+        }
+        // 2. 备用：名字匹配
+        else if (name == "PT_POLLING_MODE") {
+          isTarget = true;
+        } else if (name.contains("PT_")) {
+          isTarget = true;
+        } else if (name.contains("PhysTrigger")) {
+          isTarget = true;
+        }
+        
+        if (isTarget) {
+          debugPrint(">>> 🎯 命中目标: ${device.name} [${device.address}] (MAC匹配: $matchedByMac)");
           
           WinBle.stopScanning();
           _scanSubscription?.cancel();
           
+          // 设置显示名称
+          String displayName;
+          if (name.isNotEmpty) {
+            displayName = name;
+          } else if (matchedByMac) {
+            displayName = 'PhysTrigger (MAC Found)';
+          } else {
+            displayName = 'PT_POLLING_MODE (Unknown)';
+          }
+          
           setState(() {
             targetDeviceAddress = address;
-            targetDeviceName = name.isNotEmpty ? name : 'PhysTrigger_Device';
+            targetDeviceName = displayName;
             statusMessage = 'Device found! Tap to connect.';
             isScanning = false;
           });
@@ -137,12 +164,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         }
       });
       
-      // Timeout after 10 seconds
-      await Future.delayed(const Duration(seconds: 10));
+      // Timeout after 15 seconds (延长扫描时间)
+      await Future.delayed(const Duration(seconds: 15));
       
       if (targetDeviceAddress == null && mounted) {
         WinBle.stopScanning();
         _scanSubscription?.cancel();
+        debugPrint('[SCAN] ========== SCAN TIMEOUT (15s) ==========');
         setState(() {
           statusMessage = 'No device found. Try again.';
           isScanning = false;
@@ -184,8 +212,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       for (var serviceId in services) {
         debugPrint('[BLE] Service: $serviceId');
         
-        // Look for our target service - exact 128-bit UUID match
-        if (serviceId.toString().toLowerCase() == '4fafc201-1fb5-459e-8fcc-c5c9c331914b') {
+        // Look for our target service - exact 128-bit UUID match (PT_POLLING_MODE)
+        if (serviceId.toString().toLowerCase() == '91bad492-b950-4226-aa2b-4ede9fa42f59') {
           // Discover characteristics
           List<dynamic> characteristics = await WinBle.discoverCharacteristics(
             address: targetDeviceAddress!,
@@ -194,7 +222,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           
           for (var char in characteristics) {
             debugPrint('[BLE] Characteristic: ${char.uuid}');
-            if (char.uuid.toString().toLowerCase() == 'beb5483e-36e1-4688-b7f5-ea07361b26a8') {
+            if (char.uuid.toString().toLowerCase() == '0d563a58-193a-45ce-b540-34440306385d') {
               setState(() {
                 targetCharacteristicId = char.uuid.toString();
                 statusMessage = 'Connected! Ready to control.';
@@ -228,19 +256,25 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   void sendCmd(bool press) async {
     if (targetDeviceAddress == null || targetCharacteristicId == null) return;
     
-    final command = press ? CMD_PRESS : CMD_RELEASE;
+    // 【核心修改】如果是 false (松开)，直接忽略，不发送任何数据
+    // ESP32 固件会自动回弹，无需 App 发送 RELEASE
+    if (!press) {
+      debugPrint('[LOGIC] Ignored RELEASE command (handled by firmware)');
+      return;
+    }
+
+    final command = CMD_PRESS; // 永远只发 PRESS
     
     try {
       // Write raw byte command to characteristic
-      // writeWithResponse: true = ACK required for reliability
       await WinBle.write(
         address: targetDeviceAddress!,
-        service: "4fafc201-1fb5-459e-8fcc-c5c9c331914b", // ESP32 Service UUID
+        service: "91bad492-b950-4226-aa2b-4ede9fa42f59", // PT_POLLING_MODE Service UUID
         characteristic: targetCharacteristicId!,
         data: Uint8List.fromList(command),
         writeWithResponse: false, // No ACK wait for faster response
       );
-      debugPrint('[BLE] Sent command: ${press ? "PRESS (0x01)" : "RELEASE (0x00)"}');
+      debugPrint('[BLE] Sent TRIGGER (0x01)');;
     } on StateError catch (e) {
       // Handle disconnection during write
       debugPrint('[ERROR] Device disconnected during write: $e');
@@ -655,10 +689,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
             const SizedBox(height: 32),
 
-            // Large trigger button
+            // Large trigger button - 只发送 PRESS，RELEASE 由固件自动处理
             GestureDetector(
-              onLongPressStart: (_) => sendCmd(true),
-              onLongPressEnd: (_) => sendCmd(false),
+              onTap: () => sendCmd(true), // 点击即触发
+              // onLongPressEnd 已移除 - ESP32 固件自动回弹
               child: Container(
                 width: 160,
                 height: 160,
