@@ -1,57 +1,132 @@
-#include <NimBLEDevice.h>
-#include <ESP32Servo.h>
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
 
-Servo myServo;
-const int servoPin = 2; // 匹配你之前的物理接线：GPIO 2
+// ------------------------------------------------
+// 1. 硬件引脚定义
+// ------------------------------------------------
+#define PIN_MOS    4    // MOS 管信号线
+#define PIN_LED    8    // 板载指示灯
 
-class MyCallbacks : public NimBLECharacteristicCallbacks {
-    void onWrite(NimBLECharacteristic* pCharacteristic) {
-        std::string value = pCharacteristic->getValue();
+// PWM 设置 (适配 ESP32 v3.0+)
+const int PWM_FREQ = 5000;
+const int PWM_RES  = 8;
+
+// ------------------------------------------------
+// 2. 全局状态变量
+// ------------------------------------------------
+int target_pwm = 0;   // 目标 (0-255)
+int current_pwm = 0;  // 当前 (0-255)
+bool is_heating = false;
+
+// UUID 保持与你 Flutter App / 之前验证的框架一致
+#define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+#define CHAR_UUID           "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+
+// ------------------------------------------------
+// 3. 蓝牙回调逻辑
+// ------------------------------------------------
+class MyCallbacks: public BLECharacteristicCallbacks {
+    void onWrite(BLECharacteristic *pCharacteristic) {
+        // 原生库返回 String
+        String value = pCharacteristic->getValue();
+        
         if (value.length() > 0) {
             uint8_t cmd = (uint8_t)value[0];
-            if (cmd == 0x01) {
-                myServo.write(90); // 按钮按下，舵机旋转 90°
-                Serial.println(">>> App Pressed: Moving to 90");
-            } else if (cmd == 0x00) {
-                myServo.write(0);  // 按钮松开，舵机回弹到 0°
-                Serial.println(">>> App Released: Resetting to 0");
-            }
+            
+            // 限制 0-100%
+            if (cmd > 100) cmd = 100;
+            
+            // 计算目标 PWM
+            target_pwm = map(cmd, 0, 100, 0, 255);
+            is_heating = (cmd > 0);
+
+            // 实时打印监控
+            Serial.println("\n-----------------------------");
+            Serial.printf(">>> 指令收到: %d%%\n", cmd);
+            Serial.printf(">>> 目标 PWM 设定为: %d\n", target_pwm);
+            Serial.println("-----------------------------");
         }
     }
 };
 
+class MyServerCallbacks: public BLEServerCallbacks {
+    void onConnect(BLEServer* pServer) {
+        Serial.println("\n[!] 蓝牙已连接");
+    }
+    void onDisconnect(BLEServer* pServer) {
+        Serial.println("\n[!] 蓝牙已断开，重新启动广播...");
+        // 必须重启广播，否则断开后搜不到
+        BLEDevice::startAdvertising();
+    }
+};
+
+// ------------------------------------------------
+// 4. 初始化
+// ------------------------------------------------
 void setup() {
     Serial.begin(115200);
-    delay(1000);
-    Serial.println(">>> [STEP 1] System Rebooting...");
-    
-    myServo.attach(servoPin); // 初始化舵机
-    myServo.write(0);
+    delay(3000); // 给串口启动时间
 
-    // 初始化蓝牙
-    NimBLEDevice::init("PhysTrigger_Device"); // 蓝牙名，Flutter App 会扫描这个名字
-    Serial.println(">>> [STEP 3] Attempting BLE Init...");
+    Serial.println("\n=== 发热背心系统：正式版启动 (V1.1) ===");
+
+    pinMode(PIN_LED, OUTPUT);
+    digitalWrite(PIN_LED, HIGH); // 初始灭
+
+    // 初始化 PWM
+    if (!ledcAttach(PIN_MOS, PWM_FREQ, PWM_RES)) {
+        Serial.println("PWM 初始化失败！");
+    }
+    ledcWrite(PIN_MOS, 0);
+
+    // 蓝牙配置
+    BLEDevice::init("PhysTrigger_Vest"); 
     
-    NimBLEServer* pServer = NimBLEDevice::createServer();
-    
-    // Use full 128-bit UUID matching Flutter app
-    NimBLEService* pService = pServer->createService("4fafc201-1fb5-459e-8fcc-c5c9c331914b");
-    NimBLECharacteristic* pChar = pService->createCharacteristic(
-        "beb5483e-36e1-4688-b7f5-ea07361b26a8", 
-        NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR
-    ); 
+    // --- 修正点在这里：使用 BLEDevice 创建服务器 ---
+    BLEServer *pServer = BLEDevice::createServer();
+    pServer->setCallbacks(new MyServerCallbacks());
+
+    BLEService *pService = pServer->createService(SERVICE_UUID);
+    BLECharacteristic *pChar = pService->createCharacteristic(
+                                    CHAR_UUID,
+                                    BLECharacteristic::PROPERTY_WRITE |
+                                    BLECharacteristic::PROPERTY_WRITE_NR
+                                );
+
     pChar->setCallbacks(new MyCallbacks());
     pService->start();
-    
-    // --- 关键修复：强制广播身份 ---
-    NimBLEAdvertising* pAdvertising = NimBLEDevice::getAdvertising();
-    pAdvertising->addServiceUUID("4fafc201-1fb5-459e-8fcc-c5c9c331914b");
-    // 强制把名字塞进广播主包
-    pAdvertising->setName("PhysTrigger_Device"); 
-    pAdvertising->setScanResponse(true); // 开启响应
-    pAdvertising->start();
-    
-    Serial.println(">>> [STEP 5] ALL SYSTEMS GO! Force Advertising Started!");
+
+    // 广播配置
+    BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
+    pAdvertising->addServiceUUID(SERVICE_UUID);
+    pAdvertising->setScanResponse(true);
+    BLEDevice::startAdvertising();
+
+    Serial.println(">>> 系统就绪，等待 App 指令...");
 }
 
-void loop() { delay(10); }
+// ------------------------------------------------
+// 5. 核心循环：软启动逻辑 (防崩溃)
+// ------------------------------------------------
+void loop() {
+    // 软启动/平滑过渡
+    if (current_pwm < target_pwm) {
+        current_pwm++;
+        ledcWrite(PIN_MOS, current_pwm);
+        delay(10); 
+    } 
+    else if (current_pwm > target_pwm) {
+        current_pwm--;
+        ledcWrite(PIN_MOS, current_pwm);
+        delay(10);
+    }
+    
+    // 指示灯逻辑：加热时灯亮
+    if (is_heating) {
+        digitalWrite(PIN_LED, LOW); 
+    } else {
+        digitalWrite(PIN_LED, HIGH);
+    }
+
+    delay(1);
+}
