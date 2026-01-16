@@ -31,8 +31,9 @@ class _DeviceScanPageState extends State<DeviceScanPage> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1117),
       body: Consumer<BleControllerViewModel>(
         builder: (context, viewModel, child) {
           // Navigate to control page when connected
@@ -78,10 +79,10 @@ class _DeviceScanPageState extends State<DeviceScanPage> {
                   const SizedBox(height: 32),
                   
                   // Title
-                  const Text(
+                  Text(
                     'PhysTrigger Vest',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: colorScheme.onSurface,
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
                     ),
@@ -93,7 +94,7 @@ class _DeviceScanPageState extends State<DeviceScanPage> {
                   Text(
                     _getStatusText(viewModel),
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.6),
+                      color: colorScheme.onSurface.withOpacity(0.6),
                       fontSize: 14,
                     ),
                     textAlign: TextAlign.center,
@@ -105,7 +106,7 @@ class _DeviceScanPageState extends State<DeviceScanPage> {
                     Text(
                       'ID: ${viewModel.connectedDevice!.id}',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.4),
+                        color: colorScheme.onSurface.withOpacity(0.4),
                         fontSize: 12,
                         fontFamily: 'monospace',
                       ),

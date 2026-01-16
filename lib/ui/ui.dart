@@ -5,3 +5,4 @@ library;
 
 export 'widgets/hold_action_button.dart';
 export 'screens/control_screen.dart';
+export 'theme/app_theme.dart';

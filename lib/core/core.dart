@@ -37,3 +37,4 @@ export 'utils/android_permissions.dart';
 // ViewModels
 // ═══════════════════════════════════════════════════════════════════════════
 export 'viewmodels/ble_controller_viewmodel.dart';
+export 'viewmodels/theme_provider.dart';

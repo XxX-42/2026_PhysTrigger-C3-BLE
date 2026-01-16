@@ -27,7 +27,6 @@ class _SliderControlPageState extends State<SliderControlPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1117),
       appBar: _buildAppBar(context),
       body: Consumer<BleControllerViewModel>(
         builder: (context, viewModel, child) {
@@ -60,16 +59,23 @@ class _SliderControlPageState extends State<SliderControlPage> {
     );
   }
 
-  /// AppBar with connection status badge
+  /// AppBar with connection status badge and theme toggle
   PreferredSizeWidget _buildAppBar(BuildContext context) {
+    final themeProvider = context.watch<ThemeProvider>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return AppBar(
       title: const Text(
         'PhysTrigger Heating Vest',
         style: TextStyle(fontWeight: FontWeight.bold),
       ),
-      backgroundColor: const Color(0xFF161B22),
-      elevation: 0,
       actions: [
+        // Theme Toggle Button
+        IconButton(
+          icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+          tooltip: isDark ? '切换至浅色模式' : '切换至深色模式',
+          onPressed: () => themeProvider.toggleTheme(!isDark),
+        ),
         Consumer<BleControllerViewModel>(
           builder: (context, viewModel, child) {
             return Padding(
@@ -223,10 +229,10 @@ class _SliderControlPageState extends State<SliderControlPage> {
           const SizedBox(height: 32),
         
         // Heating Intensity Label
-        const Text(
+        Text(
           '加热强度',
           style: TextStyle(
-            color: Colors.white,
+            color: Theme.of(context).colorScheme.onSurface,
             fontSize: 24,
             fontWeight: FontWeight.bold,
             letterSpacing: 1,
@@ -244,16 +250,16 @@ class _SliderControlPageState extends State<SliderControlPage> {
             gradient: RadialGradient(
               colors: [
                 Color.lerp(
-                  const Color(0xFF161B22),
+                  Theme.of(context).colorScheme.surface,
                   const Color(0xFFF0883E),
                   _currentValue / 100,
                 )!,
-                const Color(0xFF161B22),
+                Theme.of(context).colorScheme.surface,
               ],
             ),
             border: Border.all(
               color: Color.lerp(
-                const Color(0xFF30363D),
+                Theme.of(context).colorScheme.outlineVariant,
                 const Color(0xFFF0883E),
                 _currentValue / 100,
               )!,
@@ -263,8 +269,8 @@ class _SliderControlPageState extends State<SliderControlPage> {
           child: Center(
             child: Text(
               '${_currentValue.toInt()}%',
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface,
                 fontSize: 36,
                 fontWeight: FontWeight.bold,
               ),
@@ -289,8 +295,8 @@ class _SliderControlPageState extends State<SliderControlPage> {
                 ? const Color(0xFF58A6FF) 
                 : const Color(0xFFF0883E),
             inactiveTrackColor: viewModel.isThermostatActive 
-                ? const Color(0xFF21262D) 
-                : const Color(0xFF30363D),
+                ? Theme.of(context).colorScheme.surfaceContainerHighest 
+                : Theme.of(context).colorScheme.outlineVariant,
             thumbColor: viewModel.isThermostatActive 
                 ? const Color(0xFF58A6FF) 
                 : const Color(0xFFF0883E),
@@ -336,21 +342,21 @@ class _SliderControlPageState extends State<SliderControlPage> {
             Text(
               '0%',
               style: TextStyle(
-                color: Colors.white.withOpacity(0.6),
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                 fontSize: 14,
               ),
             ),
             Text(
               '50%',
               style: TextStyle(
-                color: Colors.white.withOpacity(0.6),
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                 fontSize: 14,
               ),
             ),
             Text(
               '100%',
               style: TextStyle(
-                color: Colors.white.withOpacity(0.6),
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                 fontSize: 14,
               ),
             ),
@@ -360,10 +366,10 @@ class _SliderControlPageState extends State<SliderControlPage> {
         const SizedBox(height: 32),
 
         // Smart Thermostat Mode Label
-        const Text(
+        Text(
           '智能恒温模式',
           style: TextStyle(
-            color: Colors.white54,
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.54),
             fontSize: 12,
             letterSpacing: 1,
           ),
@@ -392,7 +398,7 @@ class _SliderControlPageState extends State<SliderControlPage> {
                 Text(
                   '恒温中... 滑动滑块可手动关闭',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.5),
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
                     fontSize: 12,
                   ),
                 ),
@@ -407,7 +413,7 @@ class _SliderControlPageState extends State<SliderControlPage> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: const Color(0xFF21262D),
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
@@ -441,14 +447,15 @@ class _SliderControlPageState extends State<SliderControlPage> {
         Icon(
           Icons.power_off,
           size: 80,
-          color: Colors.white.withOpacity(0.3),
+          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 16),
         Text(
-          viewModel.isScanning ? '正在搜索设备...' : '设备未连接',
+          '设备未连接',
           style: TextStyle(
-            color: Colors.white.withOpacity(0.6),
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
             fontSize: 18,
+            fontWeight: FontWeight.bold,
           ),
         ),
         const SizedBox(height: 16),
@@ -551,10 +558,14 @@ class _ThermostatButton extends StatelessWidget {
       style: ElevatedButton.styleFrom(
         backgroundColor: isActive
             ? const Color(0xFFF0883E)
-            : const Color(0xFF21262D),
-        foregroundColor: isActive ? Colors.black : Colors.white70,
+            : Theme.of(context).colorScheme.surfaceContainerHighest,
+        foregroundColor: isActive 
+            ? Colors.black 
+            : Theme.of(context).colorScheme.onSurface,
         side: BorderSide(
-          color: isActive ? const Color(0xFFF0883E) : Colors.white12,
+          color: isActive 
+              ? const Color(0xFFF0883E) 
+              : Theme.of(context).colorScheme.outline.withOpacity(0.2),
           width: 1,
         ),
         shape: RoundedRectangleBorder(

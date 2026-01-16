@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'core/core.dart';
+import 'ui/ui.dart';
 import 'ui/screens/device_scan_page.dart';
 
 Future<void> main() async {
@@ -37,6 +38,15 @@ class PhysTriggerApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        // Layer 0: Theme Provider
+        ChangeNotifierProvider<ThemeProvider>(
+          create: (_) {
+            final provider = ThemeProvider();
+            provider.loadPreference(); // Load saved preference
+            return provider;
+          },
+        ),
+
         // Layer 1: BLE Service
         Provider<IBleService>(
           create: (_) => FlutterBluePlusService(),
@@ -57,21 +67,17 @@ class PhysTriggerApp extends StatelessWidget {
               viewModel ?? BleControllerViewModel(service),
         ),
       ],
-      child: MaterialApp(
-        title: 'PhysTrigger Heating Vest',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          brightness: Brightness.dark,
-          scaffoldBackgroundColor: const Color(0xFF0D1117),
-          colorScheme: const ColorScheme.dark(
-            primary: Color(0xFF58A6FF),
-            secondary: Color(0xFF238636),
-            surface: Color(0xFF161B22),
-          ),
-          fontFamily: 'Segoe UI',
-          useMaterial3: true,
-        ),
-        home: const DeviceScanPage(),
+      child: Consumer<ThemeProvider>(
+        builder: (context, themeProvider, _) {
+          return MaterialApp(
+            title: 'PhysTrigger Heating Vest',
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
+            darkTheme: AppTheme.dark,
+            themeMode: themeProvider.themeMode,
+            home: const DeviceScanPage(),
+          );
+        },
       ),
     );
   }

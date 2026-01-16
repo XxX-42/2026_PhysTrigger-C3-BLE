@@ -18,14 +18,25 @@ class TemperatureChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    
+    // Adaptive colors
+    final surfaceColor = colorScheme.surface;
+    final borderColor = isDark ? const Color(0xFF30363D) : const Color(0xFFE5E5EA);
+    final textMutedColor = colorScheme.onSurface.withOpacity(0.6);
+    final gridColor = isDark ? const Color(0xFF30363D) : const Color(0xFFE5E5EA);
+    final labelColor = isDark ? const Color(0xFF8B949E) : const Color(0xFF6B7280);
+
     return Container(
       height: 220,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF161B22),
+        color: surfaceColor,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: const Color(0xFF30363D),
+          color: borderColor,
           width: 1,
         ),
       ),
@@ -37,14 +48,14 @@ class TemperatureChart extends StatelessWidget {
             children: [
               const Icon(
                 Icons.thermostat,
-                color: Color(0xFFF0883E),
+                color: Color(0xFFF0883E), // Brand color
                 size: 24,
               ),
               const SizedBox(width: 8),
               Text(
                 '${currentTemperature.toStringAsFixed(1)}°C',
                 style: const TextStyle(
-                  color: Color(0xFFF0883E),
+                  color: Color(0xFFF0883E), // Brand color
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
                 ),
@@ -53,7 +64,7 @@ class TemperatureChart extends StatelessWidget {
               Text(
                 '实时温度',
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.6),
+                  color: textMutedColor,
                   fontSize: 12,
                 ),
               ),
@@ -69,7 +80,7 @@ class TemperatureChart extends StatelessWidget {
                     child: Text(
                       '等待温度数据...',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.4),
+                        color: textMutedColor,
                         fontSize: 14,
                       ),
                     ),
@@ -82,7 +93,7 @@ class TemperatureChart extends StatelessWidget {
                         horizontalInterval: 5,
                         getDrawingHorizontalLine: (value) {
                           return FlLine(
-                            color: const Color(0xFF30363D),
+                            color: gridColor,
                             strokeWidth: 1,
                           );
                         },
@@ -105,8 +116,8 @@ class TemperatureChart extends StatelessWidget {
                             getTitlesWidget: (value, meta) {
                               return Text(
                                 value.toInt().toString(),
-                                style: const TextStyle(
-                                  color: Color(0xFF8B949E),
+                                style: TextStyle(
+                                  color: labelColor,
                                   fontSize: 10,
                                 ),
                               );
@@ -126,7 +137,7 @@ class TemperatureChart extends StatelessWidget {
                           isCurved: true,
                           gradient: const LinearGradient(
                             colors: [
-                              Color(0xFFF0883E),
+                              Color(0xFFF0883E), // Brand gradient
                               Color(0xFFDA3633),
                             ],
                           ),
