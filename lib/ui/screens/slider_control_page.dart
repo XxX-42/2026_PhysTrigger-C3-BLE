@@ -436,6 +436,27 @@ class _SliderControlPageState extends State<SliderControlPage> {
               ],
             ),
           ),
+
+      const SizedBox(height: 48),
+        Column(
+          children: [
+            Text(
+              '乐山市欣欣艺术职业高中 版权所有 © 2025',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+                fontSize: 11,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Leshan Xinxin Art Vocational High School',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
+                fontSize: 9,
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }

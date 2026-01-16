@@ -30,6 +30,9 @@ dependencies:
   # Cupertino Icons (iOS style)
   cupertino_icons: ^1.0.6
   flutter_blue_plus_windows: ^1.26.1
+  
+  # HTTP for network time verification
+  http: ^1.2.0
 
 dev_dependencies:
   flutter_test:

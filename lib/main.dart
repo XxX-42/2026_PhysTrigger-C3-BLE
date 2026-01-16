@@ -4,30 +4,43 @@
 library;
 
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'core/core.dart';
+import 'core/services/security_service.dart';
 import 'ui/ui.dart';
 import 'ui/screens/device_scan_page.dart';
+import 'ui/screens/expiry_screen.dart';
+
+/// Global flag for license expiry status.
+bool _isLicenseExpired = false;
 
 Future<void> main() async {
-  // Fix 2: Safety Wrapper
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
+    
+    // Security Check: Verify license expiry
+    final securityService = SecurityService();
+    _isLicenseExpired = await securityService.isExpired();
     
     // Catch-all for Flutter framework errors
     FlutterError.onError = (FlutterErrorDetails details) {
       FlutterError.presentError(details);
-      debugPrint('[FLUTTER ERROR] ${details.exception}');
-      debugPrint('[STACK TRACE] ${details.stack}');
+      if (kDebugMode) {
+        debugPrint('[FLUTTER ERROR] ${details.exception}');
+        debugPrint('[STACK TRACE] ${details.stack}');
+      }
     };
 
     runApp(const PhysTriggerApp());
   }, (Object error, StackTrace stack) {
     // Catch-all for async/Dart errors
-    debugPrint('[FATAL APP ERROR] $error');
-    debugPrint('[STACK TRACE] $stack');
+    if (kDebugMode) {
+      debugPrint('[FATAL APP ERROR] $error');
+      debugPrint('[STACK TRACE] $stack');
+    }
   });
 }
 
@@ -36,13 +49,41 @@ class PhysTriggerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // If license expired, show expiry screen with minimal providers
+    if (_isLicenseExpired) {
+      return MultiProvider(
+        providers: [
+          ChangeNotifierProvider<ThemeProvider>(
+            create: (_) {
+              final provider = ThemeProvider();
+              provider.loadPreference();
+              return provider;
+            },
+          ),
+        ],
+        child: Consumer<ThemeProvider>(
+          builder: (context, themeProvider, _) {
+            return MaterialApp(
+              title: 'PhysTrigger - License Expired',
+              debugShowCheckedModeBanner: false,
+              theme: AppTheme.light,
+              darkTheme: AppTheme.dark,
+              themeMode: themeProvider.themeMode,
+              home: const ExpiryScreen(),
+            );
+          },
+        ),
+      );
+    }
+
+    // Normal app with full providers
     return MultiProvider(
       providers: [
         // Layer 0: Theme Provider
         ChangeNotifierProvider<ThemeProvider>(
           create: (_) {
             final provider = ThemeProvider();
-            provider.loadPreference(); // Load saved preference
+            provider.loadPreference();
             return provider;
           },
         ),
@@ -59,7 +100,6 @@ class PhysTriggerApp extends StatelessWidget {
             final viewModel = BleControllerViewModel(
               context.read<IBleService>(),
             );
-            // Critical: Initialize permission/scan logic AFTER creation
             viewModel.initialize();
             return viewModel;
           },

@@ -49,7 +49,7 @@ class _DeviceScanPageState extends State<DeviceScanPage> {
 
           final showLoading = _isConnecting || viewModel.isScanning || viewModel.isConnecting;
 
-          return Center(
+          return SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(32.0),
               child: Column(
@@ -189,6 +189,32 @@ class _DeviceScanPageState extends State<DeviceScanPage> {
                       ),
                     ),
                   ],
+                  
+                  const Spacer(),
+                  
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 24.0),
+                    child: Column(
+                      children: [
+                        Text(
+                          '乐山市欣欣艺术职业高中 版权所有 © 2025',
+                          style: TextStyle(
+                            color: colorScheme.onSurface.withOpacity(0.5),
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'All Rights Reserved.',
+                          style: TextStyle(
+                            color: colorScheme.onSurface.withOpacity(0.3),
+                            fontSize: 10,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
                 ],
               ),
             ),
