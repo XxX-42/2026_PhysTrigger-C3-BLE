@@ -111,8 +111,8 @@ class ControlScreen extends StatelessWidget {
                   ),
           ),
 
-          // Error message
-          if (viewModel.errorMessage != null)
+          // Error message - using pattern matching for null safety
+          if (viewModel.errorMessage case String msg)
             Container(
               margin: const EdgeInsets.only(top: 8),
               padding: const EdgeInsets.all(12),
@@ -122,7 +122,7 @@ class ControlScreen extends StatelessWidget {
                 border: Border.all(color: Colors.redAccent),
               ),
               child: Text(
-                viewModel.errorMessage!,
+                msg,
                 style: const TextStyle(color: Colors.redAccent, fontSize: 12),
               ),
             ),
@@ -242,13 +242,13 @@ class ControlScreen extends StatelessWidget {
               HoldActionButton(
                 label: 'STOP',
                 icon: Icons.stop_circle_outlined,
-                pressCommand: BleCommands.stop,
-                releaseCommand: BleCommands.stop,
+                pressCommand: const [0x00], // STOP command
+                releaseCommand: const [0x00], // STOP command
                 onCommand: viewModel.sendCommand,
                 size: 70,
                 activeColor: Colors.red,
                 inactiveColor: Colors.red.shade900,
-                enabled: viewModel.isConnected,
+                enabled:viewModel.isConnected,
               ),
             ],
           ),

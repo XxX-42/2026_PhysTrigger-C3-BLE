@@ -2,74 +2,51 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- ============================================================ -->
-    <!-- BLUETOOTH PERMISSIONS - CRITICAL FOR BLE FUNCTIONALITY      -->
+    <!-- PERMISSIONS - CRITICAL FOR BLE STABILITY                    -->
     <!-- ============================================================ -->
     
-    <!-- 
-    ┌─────────────────────────────────────────────────────────────────┐
-    │ Android 10-11 (API 29-30) - Legacy Permissions                 │
-    │ These are required for BLE scanning on older devices.          │
-    │ maxSdkVersion="30" ensures they're not requested on Android 12+│
-    └─────────────────────────────────────────────────────────────────┘
-    -->
+    <!-- Android 12+ (API 31+) Permissions -->
+    <!-- skip GPS requirement for BLE scanning on API 31+ -->
+    <uses-permission 
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
+        
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    
+    <!-- Android 10-11 (API 29-30) Legacy Permissions -->
+    <!-- maxSdkVersion="30" prevents asking for location on Android 12+ -->
+    <uses-permission 
+        android:name="android.permission.ACCESS_FINE_LOCATION"
+        android:maxSdkVersion="30" />
+    
+    <!-- Basic Bluetooth permissions for legacy support -->
     <uses-permission 
         android:name="android.permission.BLUETOOTH" 
         android:maxSdkVersion="30" />
     <uses-permission 
         android:name="android.permission.BLUETOOTH_ADMIN" 
         android:maxSdkVersion="30" />
-    
-    <!-- Location permission required for BLE scanning on Android 10-11 -->
-    <!-- BLE scanning can reveal location via beacons, hence this requirement -->
-    <uses-permission 
-        android:name="android.permission.ACCESS_FINE_LOCATION"
-        android:maxSdkVersion="30" />
-    
-    <!-- Coarse location as fallback -->
-    <uses-permission 
-        android:name="android.permission.ACCESS_COARSE_LOCATION"
-        android:maxSdkVersion="30" />
 
-    <!-- 
-    ┌─────────────────────────────────────────────────────────────────┐
-    │ Android 12+ (API 31+) - Fine-grained Bluetooth Permissions     │
-    │ These new permissions decouple BLE from location access.       │
-    └─────────────────────────────────────────────────────────────────┘
-    -->
-    
-    <!-- BLUETOOTH_SCAN: Required to discover nearby BLE devices -->
-    <!-- neverForLocation: We don't use scan results for location inference -->
-    <uses-permission 
-        android:name="android.permission.BLUETOOTH_SCAN"
-        android:usesPermissionFlags="neverForLocation" />
-    
-    <!-- BLUETOOTH_CONNECT: Required to connect to paired/discovered devices -->
-    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    
-    <!-- BLUETOOTH_ADVERTISE: Only needed if this device broadcasts as peripheral -->
-    <!-- Uncomment if implementing peripheral mode -->
-    <!-- <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" /> -->
-
-    <!-- 
-    ┌─────────────────────────────────────────────────────────────────┐
-    │ Hardware Features                                               │
-    └─────────────────────────────────────────────────────────────────┘
-    -->
-    
-    <!-- Declare BLE as required - App won't appear on devices without BLE -->
+    <!-- Feature Declarations -->
     <uses-feature 
         android:name="android.hardware.bluetooth_le" 
         android:required="true" />
+    <!-- Required for location on older Androids -->
+    <uses-feature 
+        android:name="android.hardware.location.gps" 
+        android:required="false" />
 
     <!-- ============================================================ -->
     <!-- APPLICATION CONFIGURATION                                    -->
     <!-- ============================================================ -->
     
+    <!-- hardwareAccelerated="true" is CRITICAL for some Chinese ROMs (MIUI/HyperOS) -->
     <application
         android:label="PhysTrigger"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:enableOnBackInvokedCallback="true">
+        android:enableOnBackInvokedCallback="true"
+        android:hardwareAccelerated="true">
         
         <activity
             android:name=".MainActivity"
@@ -78,29 +55,26 @@
             android:taskAffinity=""
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
-            android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
             
-            <!-- Main Entry Point -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
             
-            <!-- Specifies the Flutter rendering engine -->
+            <!-- Flutter Engine Metadata -->
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme" />
         </activity>
         
-        <!-- Don't delete the meta-data below -->
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
             
     </application>
     
-    <!-- Query for Bluetooth adapter state (Android 11+) -->
+    <!-- Queries for Bluetooth visibility -->
     <queries>
         <intent>
             <action android:name="android.bluetooth.adapter.action.REQUEST_ENABLE" />

@@ -5,6 +5,9 @@
 /// - Each element must be in range 0-255 (unsigned byte)
 library;
 
+import 'dart:convert'; // For utf8 decoder
+import 'package:flutter/foundation.dart';
+
 /// Converts a single hex value to a byte list
 /// 
 /// Example:
@@ -80,31 +83,52 @@ void validateBytes(List<int> bytes) {
   }
 }
 
-/// Common command constants based on BLE Protocol Summary
+/// Converts slider percentage to byte array for BLE transmission
 /// 
-/// These values correspond to the Hex commands in the protocol table:
-/// | Action  | Hex  | Decimal |
-/// |---------|------|---------|
-/// | Stop    | 0x00 | [0]     |
-/// | Forward | 0x01 | [1]     |
-/// | Back    | 0x02 | [2]     |
-/// | Left    | 0x03 | [3]     |
-/// | Right   | 0x04 | [4]     |
-abstract class BleCommands {
-  static const List<int> stop = [0x00];
-  static const List<int> forward = [0x01];
-  static const List<int> backward = [0x02];
-  static const List<int> left = [0x03];
-  static const List<int> right = [0x04];
+/// ESP32 firmware expects UINT8 (0-100) directly, no conversion needed.
+/// The firmware internally maps this to PWM duty cycle (0-255).
+/// 
+/// Example:
+/// ```dart
+/// sliderValueToBytes(0);    // Returns [0]   - 0% heating
+/// sliderValueToBytes(50);   // Returns [50]  - 50% heating
+/// sliderValueToBytes(100);  // Returns [100] - 100% heating
+/// ```
+List<int> sliderValueToBytes(int percentage) {
+  assert(percentage >= 0 && percentage <= 100, 
+    'Slider value must be in range 0-100');
+  return [percentage];
 }
 
-/// BLE UUID constants from the protocol
+/// BLE UUID constants for PhysTrigger Heating Vest
+/// 
+/// These UUIDs match the ESP32 firmware in sketch_jan3a.ino
 abstract class BleUuids {
-  /// Default HM-10/ESP32 Serial Service UUID
-  static const String serviceUuid = '0000FFE0-0000-1000-8000-00805F9B34FB';
-  static const String serviceUuidShort = 'FFE0';
+  /// PhysTrigger Heating Vest Service UUID
+  static const String serviceUuid = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
   
-  /// Default Data Characteristic UUID (Read/Write/Notify)
-  static const String characteristicUuid = '0000FFE1-0000-1000-8000-00805F9B34FB';
-  static const String characteristicUuidShort = 'FFE1';
+  /// PWM Control Characteristic UUID (Write/Write No Response)
+  /// Accepts UINT8 values from 0-100 representing heating intensity percentage
+  static const String characteristicUuid = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
+  
+  /// Temperature Notification Characteristic UUID (Read/Notify)
+  /// Broadcasts temperature readings as UTF8 string (e.g., "25.82")
+  static const String tempCharacteristicUuid = 'beb5483e-36e1-4688-b7f5-ea07361b26a9';
+  
+  /// Target device name for scanning
+  static const String targetDeviceName = 'PhysTrigger_Vest';
+}
+
+/// Parse temperature from UTF8 bytes
+/// 
+/// ESP32 sends temperature as UTF8 string (e.g., "25.82")
+/// This function converts bytes to string and parses to double
+double parseTemperature(List<int> bytes) {
+  try {
+    final str = utf8.decode(bytes);
+    return double.tryParse(str) ?? 0.0;
+  } catch (e) {
+    debugPrint('Temperature parse error: $e');
+    return 0.0;
+  }
 }

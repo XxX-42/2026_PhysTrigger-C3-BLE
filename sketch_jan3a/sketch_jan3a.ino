@@ -1,132 +1,184 @@
 #include <BLEDevice.h>
 #include <BLEServer.h>
 #include <BLEUtils.h>
+#include <BLE2902.h>
+#include <Wire.h>
+#include <Adafruit_MLX90614.h>
 
 // ------------------------------------------------
 // 1. 硬件引脚定义
 // ------------------------------------------------
 #define PIN_MOS    4    // MOS 管信号线
 #define PIN_LED    8    // 板载指示灯
+#define PIN_SDA    5    // I2C SDA
+#define PIN_SCL    6    // I2C SCL
 
-// PWM 设置 (适配 ESP32 v3.0+)
 const int PWM_FREQ = 5000;
 const int PWM_RES  = 8;
 
 // ------------------------------------------------
 // 2. 全局状态变量
 // ------------------------------------------------
-int target_pwm = 0;   // 目标 (0-255)
-int current_pwm = 0;  // 当前 (0-255)
+int target_pwm = 0;
+int current_pwm = 0;
 bool is_heating = false;
 
-// UUID 保持与你 Flutter App / 之前验证的框架一致
+Adafruit_MLX90614 mlx = Adafruit_MLX90614(); 
+unsigned long last_temp_time = 0;
+
+// 蓝牙 UUID
 #define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-#define CHAR_UUID           "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+#define CHAR_UUID_CTRL      "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+#define CHAR_UUID_TEMP      "beb5483e-36e1-4688-b7f5-ea07361b26a9"
+
+BLECharacteristic *pTempChar = NULL; 
 
 // ------------------------------------------------
-// 3. 蓝牙回调逻辑
+// 3. 辅助函数：生成运行时间戳 [H:M:S]
+// ------------------------------------------------
+String getTimestamp() {
+    unsigned long totalSeconds = millis() / 1000;
+    int seconds = totalSeconds % 60;
+    int minutes = (totalSeconds / 60) % 60;
+    int hours = (totalSeconds / 3600);
+
+    char buf[20];
+    snprintf(buf, sizeof(buf), "[%02d:%02d:%02d]", hours, minutes, seconds);
+    return String(buf);
+}
+
+// ------------------------------------------------
+// 4. 蓝牙回调
 // ------------------------------------------------
 class MyCallbacks: public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic *pCharacteristic) {
-        // 原生库返回 String
         String value = pCharacteristic->getValue();
-        
         if (value.length() > 0) {
             uint8_t cmd = (uint8_t)value[0];
-            
-            // 限制 0-100%
             if (cmd > 100) cmd = 100;
-            
-            // 计算目标 PWM
             target_pwm = map(cmd, 0, 100, 0, 255);
             is_heating = (cmd > 0);
-
-            // 实时打印监控
-            Serial.println("\n-----------------------------");
-            Serial.printf(">>> 指令收到: %d%%\n", cmd);
-            Serial.printf(">>> 目标 PWM 设定为: %d\n", target_pwm);
-            Serial.println("-----------------------------");
         }
     }
 };
 
 class MyServerCallbacks: public BLEServerCallbacks {
+    // 兼容性修正：使用标准的单参数 onConnect
     void onConnect(BLEServer* pServer) {
-        Serial.println("\n[!] 蓝牙已连接");
+        // 由于无法直接从单参数获取 MAC，我们通过全局 Device 状态打印连接事件
+        Serial.print(getTimestamp());
+        Serial.println(" [BLE] 设备已连接 | 系统正在握手...");
     }
+
     void onDisconnect(BLEServer* pServer) {
-        Serial.println("\n[!] 蓝牙已断开，重新启动广播...");
-        // 必须重启广播，否则断开后搜不到
+        Serial.println(getTimestamp() + " [!!!] 蓝牙断开 - 触发安全熔断");
+        
+        // 立即物理停机
+        target_pwm = 0;
+        current_pwm = 0;
+        is_heating = false;
+        ledcWrite(PIN_MOS, 0);
+        digitalWrite(PIN_LED, HIGH);
+        
+        // 重启广播
         BLEDevice::startAdvertising();
     }
 };
 
 // ------------------------------------------------
-// 4. 初始化
+// 5. 初始化
 // ------------------------------------------------
 void setup() {
     Serial.begin(115200);
-    delay(3000); // 给串口启动时间
+    delay(2000);
 
-    Serial.println("\n=== 发热背心系统：正式版启动 (V1.1) ===");
+    Serial.println("\n" + getTimestamp() + " === 系统正式版 V3.0 (高兼容) 启动 ===");
 
     pinMode(PIN_LED, OUTPUT);
-    digitalWrite(PIN_LED, HIGH); // 初始灭
-
-    // 初始化 PWM
-    if (!ledcAttach(PIN_MOS, PWM_FREQ, PWM_RES)) {
-        Serial.println("PWM 初始化失败！");
-    }
+    digitalWrite(PIN_LED, HIGH);
+    
+    // 初始化 PWM 控制
+    ledcAttach(PIN_MOS, PWM_FREQ, PWM_RES);
     ledcWrite(PIN_MOS, 0);
 
-    // 蓝牙配置
+    // 初始化 I2C 温度传感器
+    Wire.begin(PIN_SDA, PIN_SCL);
+    if (!mlx.begin()) {
+        Serial.println(getTimestamp() + " ❌ MLX90614 初始化失败，请检查接线");
+    }
+
+    // 初始化蓝牙设备
     BLEDevice::init("PhysTrigger_Vest"); 
-    
-    // --- 修正点在这里：使用 BLEDevice 创建服务器 ---
     BLEServer *pServer = BLEDevice::createServer();
     pServer->setCallbacks(new MyServerCallbacks());
 
+    // 创建服务
     BLEService *pService = pServer->createService(SERVICE_UUID);
-    BLECharacteristic *pChar = pService->createCharacteristic(
-                                    CHAR_UUID,
+    
+    // 特征值 1: 控制 (Write)
+    BLECharacteristic *pCtrlChar = pService->createCharacteristic(
+                                    CHAR_UUID_CTRL,
                                     BLECharacteristic::PROPERTY_WRITE |
                                     BLECharacteristic::PROPERTY_WRITE_NR
                                 );
+    pCtrlChar->setCallbacks(new MyCallbacks());
 
-    pChar->setCallbacks(new MyCallbacks());
+    // 特征值 2: 温度 (Read/Notify)
+    pTempChar = pService->createCharacteristic(
+                                    CHAR_UUID_TEMP,
+                                    BLECharacteristic::PROPERTY_READ | 
+                                    BLECharacteristic::PROPERTY_NOTIFY
+                                );
+    // 增加描述符以支持 Notify
+    pTempChar->addDescriptor(new BLE2902());
+
     pService->start();
 
     // 广播配置
     BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
     pAdvertising->addServiceUUID(SERVICE_UUID);
     pAdvertising->setScanResponse(true);
-    BLEDevice::startAdvertising();
-
-    Serial.println(">>> 系统就绪，等待 App 指令...");
+    pAdvertising->start();
+    
+    Serial.println(getTimestamp() + " >>> 准备就绪，当前电压稳定。");
 }
 
 // ------------------------------------------------
-// 5. 核心循环：软启动逻辑 (防崩溃)
+// 6. 主循环
 // ------------------------------------------------
 void loop() {
-    // 软启动/平滑过渡
+    // A. 加热软启动逻辑：防止电流浪涌导致重启
     if (current_pwm < target_pwm) {
         current_pwm++;
         ledcWrite(PIN_MOS, current_pwm);
         delay(10); 
-    } 
-    else if (current_pwm > target_pwm) {
+    } else if (current_pwm > target_pwm) {
         current_pwm--;
         ledcWrite(PIN_MOS, current_pwm);
         delay(10);
     }
     
-    // 指示灯逻辑：加热时灯亮
-    if (is_heating) {
-        digitalWrite(PIN_LED, LOW); 
-    } else {
-        digitalWrite(PIN_LED, HIGH);
-    }
+    // LED 状态与加热同步：低电平点亮指示灯
+    digitalWrite(PIN_LED, is_heating ? LOW : HIGH);
 
-    delay(1);
+    // B. 定时温度监测与时间戳输出 (每 1000ms)
+    if (millis() - last_temp_time > 1000) {
+        last_temp_time = millis();
+        
+        float objTemp = mlx.readObjectTempC();
+        if (objTemp > -100 && objTemp < 200) {
+            // 串口输出格式：[HH:MM:SS] [🌡️ 温度监测] 目标温度: XX.XX C
+            Serial.print(getTimestamp()); 
+            Serial.printf(" [🌡️ 温度监测] 目标温度: %.2f C\n", objTemp);
+            
+            // 蓝牙 Notify 推送数据到 App
+            String tempStr = String(objTemp, 2); 
+            if (pTempChar != NULL) {
+                pTempChar->setValue(tempStr.c_str());
+                pTempChar->notify();
+            }
+        }
+    }
+    
+    delay(5);
 }

@@ -10,13 +10,8 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # BLE Communication
-  # flutter_blue_plus for mobile platforms
-  flutter_blue_plus: ^1.34.5
-  
-  # Windows BLE Support via WinRT (direct native binding)
-  # This provides native Windows BLE functionality without flutter_blue_plus wrapper
-  win_ble: ^1.1.1
+  # BLE Communication (supports Android, iOS, macOS, Windows, Linux)
+  flutter_blue_plus: 1.34.5
 
   # Permission Handling
   # Required for Android 12+ runtime permissions
@@ -25,8 +20,16 @@ dependencies:
   # State Management (optional, for ChangeNotifier)
   provider: ^6.1.0
 
+  # Real-time Chart Visualization
+  # For displaying temperature curves
+  fl_chart: ^0.69.0
+  
+  # Local Storage for persisting last connected device
+  shared_preferences: ^2.2.2
+
   # Cupertino Icons (iOS style)
   cupertino_icons: ^1.0.6
+  flutter_blue_plus_windows: ^1.26.1
 
 dev_dependencies:
   flutter_test:
